@@ -12,10 +12,10 @@
         (org.gnome.Rhythmbox3/org.mpris.MediaPlayer2.rhythmbox)
 
 ----------------------------------------------------------------------------------------------
- plugin.py       : contains the main loop and manage "out of events" displaying and decisions
- listeners.py    : contains the class witch listen to open/close softwares events (change_owner)
+ - plugin.py       : contains the main loop and manage "out of events" displaying and decisions
+ - listeners.py    : contains the class witch listen to open/close softwares events (change_owner)
                    and "change status event" of these softwares while running
- displayers.py   : contains the class that connect to the LCD and manage displaying of datas
+ - displayers.py   : contains the class that connect to the LCD and manage displaying of datas
                    from softwares listened
 ----------------------------------------------------------------------------------------------
  - Actualy support : 
