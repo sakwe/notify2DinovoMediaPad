@@ -25,13 +25,13 @@ LCD_DISP_MODE_SCROLL3 = 0x03 # ... by 3 buffers
 class MediaPad:
        
     # Initialisise mediapad object and wait for it in system bus
-    def __init__(self):
-        import dbus
-        self.system_bus = dbus.SystemBus()
+    def __init__(self,system_bus):
+        self.system_bus = system_bus      
         self.system_bus.watch_name_owner(URI_FOR_LCD,self.ownerChanged)
         self.loopNumber = 0
         self.lcd = None
         self.clockMode = False
+        self.writing = False
     
     # Connect mediapad object to system bus
     def ownerChanged(self,new_owner):
@@ -40,7 +40,7 @@ class MediaPad:
             self.lcd = None
             print 'MediaPad is disconnected. Waiting...'
         else:
-            self.device = self.system_bus.get_object(URI_FOR_LCD,PATH_FOR_LCD)
+            self.device = self.system_bus.get_object(URI_FOR_LCD,PATH_FOR_LCD,True,True)
             self.lcd = dbus.Interface(self.device,URI_FOR_LCD)
             self.lcd.WriteText('Gnome linked ;-)')  
             self.lcd.BlinkOrBeep(2,0)
@@ -68,14 +68,17 @@ class MediaPad:
     
     # Receive an write order from a software object -> dispatch to correct writer
     def writeData(self,soft):
-        # If the LCD is on clock mode, clean the LCD
-        if self.clockMode == True : 
-            self.lcd.WriteText(" ")
-            self.clockMode = False
-        if soft.type == "media" :
-            self.writeMedia(soft)
-        elif soft.type == "message" or soft.type == "mail":  
-            self.writeMessage(soft)      
+        if self.writing == False :
+            self.writing == True
+            # If the LCD is on clock mode, clean the LCD
+            if self.clockMode == True : 
+                self.lcd.WriteText(" ")
+                self.clockMode = False
+            if soft.type == "media" :
+                self.writeMedia(soft)
+            elif soft.type == "message" or soft.type == "mail":  
+                self.writeMessage(soft)  
+            self.writing = False    
            
     # Write media data to the LCD (title/artist/album/progress bar/status/resting time)     
     def writeMedia(self,soft):

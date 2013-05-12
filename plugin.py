@@ -14,16 +14,18 @@ DBusGMainLoop(set_as_default=True)
 mainloop = gobject.MainLoop()
 gobject.threads_init()
 context = mainloop.get_context()
+
+ses_bus = dbus.SessionBus()
+sys_bus = dbus.SystemBus()
    
 # Instantiate the mediapad     
-mediapad = MediaPad()
+mediapad = MediaPad(sys_bus)
 
 # Load all listenable softwares in the session
-softwares = {SkypeListened(),BansheeListened(),RhythmboxListened(),TotemListened(),EvolutionListened()}
+softwares = {BansheeListened(ses_bus),SkypeListened(ses_bus),RhythmboxListened(ses_bus),TotemListened(ses_bus),EvolutionListened(ses_bus)}
 
 # Function for main loop watching and "constant displaying" (out of event control)
 def display(softwares,mediapad):
-    time.sleep(2.0)
     # Main loop waiting for mediapad (listen for connection)
     while 1 : 
         if mediapad.lcd != None :  
@@ -32,14 +34,14 @@ def display(softwares,mediapad):
                 # Connect the soft to the actual mediapad instance
                 software.mediapad = mediapad
             # and begin refresh display...  
-            pausedMode = False          
-            while mediapad.lcd :
+            pausedMode = False    
+            while mediapad.lcd != None :
                 # Search for the priority media software
                 best = 0
                 prioritySoft = None
                 for software in softwares :
                     # Get softwares only with "playing" state (out of event control)
-                    if software.state == "playing":
+                    if software.state == "playing" or software.state == "loading" or software.state == "loaded":
                         # Get the actual best priority software playing
                         if software.priority > best : 
                             best = software.priority
@@ -74,7 +76,6 @@ def display(softwares,mediapad):
 # Run general displaying function in separated thread
 t = Thread(target=display, args=(softwares,mediapad))
 t.start()
-
 
 # Run the main loop
 mainloop.run()

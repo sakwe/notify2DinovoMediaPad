@@ -3,7 +3,6 @@
 # This part contains the listeners 
 #---------------------------------
 
-import Skype4Py
 from displayers import *
 from email.header import decode_header
 
@@ -65,11 +64,10 @@ class MessageData :
 # Main Class Model for software we listen
 #----------------------------------------
 class SoftwareListened() : 
-        
+       
     priorityGlobal = 0
 
-    def __init__(self):
-        import dbus
+    def __init__(self,session_bus):
         self.name = "unsupported software"        
         self.state = "undefined"
         self.type = "undefined" 
@@ -79,7 +77,7 @@ class SoftwareListened() :
         self.prox = None
         self.loopNumber = 0
         self.priority = 0
-        self.session_bus = dbus.SessionBus()
+        self.session_bus = session_bus
         self.setting()
     
     def setting(self) :
@@ -104,13 +102,16 @@ class SoftwareListened() :
         if self.state == "playing" : 
             SoftwareListened.priorityGlobal = SoftwareListened.priorityGlobal + 1
             self.priority = SoftwareListened.priorityGlobal
-        self.writeData()  
+        if self.mediapad != None :
+            self.writeData()  
         # If the software is a message 
         print self.name.title() + " state changed: %s" % self.state.title() 
           
     def writeData(self):
         if self.mediapad != None : 
             self.mediapad.writeData(self)
+        else : 
+            print "Error : Mediapad can't display " + self.state.title() + " for " + self.name.title() 
         
 #-----------------------------------------------
 # SoftwareListened overwrite for Banshee support        
@@ -125,21 +126,24 @@ class BansheeListened(SoftwareListened):
                   
     def listen(self):
         self.app = self.session_bus.get_object(URI_FOR_BANSHEE, PATH_TO_BANSHEE_PLAYER)
-        self.session_bus.add_signal_receiver(self.statusChanged, dbus_interface=URI_FOR_BANSHEE_PLAYER,signal_name=EVENT_FOR_BANSHEE_STATE)  
-        
+        self.session_bus.add_signal_receiver(self.statusChanged, dbus_interface=URI_FOR_BANSHEE_PLAYER,signal_name=EVENT_FOR_BANSHEE_STATE)
+               
     def getData(self):
         if self.app != None : 
-            self.state = self.app.GetCurrentState()
-            currentTrack = self.app.GetCurrentTrack()
-            if currentTrack.has_key(u'album-artist'):
-                self.data.artist = str(currentTrack[u'album-artist'])
-            if currentTrack.has_key(u'album'):
-                self.data.album = str(currentTrack[u'album'])
-            if currentTrack.has_key(u'name'):
-                self.data.title = str(currentTrack[u'name'])
-            self.data.position = self.app.GetPosition()    
-            self.data.lenght = self.app.GetLength()
-            
+            try :
+                self.state = self.app.GetCurrentState()
+                currentTrack = self.app.GetCurrentTrack()
+                if currentTrack.has_key(u'album-artist'):
+                    self.data.artist = str(currentTrack[u'album-artist'])
+                if currentTrack.has_key(u'album'):
+                    self.data.album = str(currentTrack[u'album'])
+                if currentTrack.has_key(u'name'):
+                    self.data.title = str(currentTrack[u'name'])
+                self.data.position = self.app.GetPosition()    
+                self.data.lenght = self.app.GetLength()
+            except : 
+                self.state = "waiting"            
+                print "Error with DBUS Banshee... Will try next loop" 
 
 #-------------------------------------------------
 # SoftwareListened overwrite for Rhythmbox support        
@@ -245,19 +249,29 @@ class SkypeEvents:
 class SkypeListened(SoftwareListened):
 
     def setting(self):
+        import Skype4Py 
         self.name = "skype"
         self.type = "message"
         self.data =  MessageData()
         self.session_bus.watch_name_owner(URI_FOR_SKYPE,self.ownerChanged)
-            
-    def listen(self):  
         self.event_skype = Skype4Py.Skype(Events=SkypeEvents(self))
-        self.event_skype.Attach()
         self.appev = self.event_skype.Application('Skype4Py')
-        self.appev.Create()     
+                    
+    def listen(self):
+        import Skype4Py
+        time.sleep(2)
+        try : 
+            self.event_skype = Skype4Py.Skype(Events=SkypeEvents(self))
+            self.event_skype.Attach()
+            self.appev = self.event_skype.Application('Skype4Py')
+            self.appev.Create()     
+        except : 
+            print "Error while listening for Skype... Waiting 2 sec and try again."
+            time.sleep(2)
+            self.listen()
               
     def getData(self):
-        self.data.message = "TODO"
+        self.data.message = self.data.message # TODO : Refresh data from skype
 
 
 #-------------------------------------------------
