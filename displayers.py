@@ -1,4 +1,6 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
+
 import time
 
 # This part contains the LCD displayer class
@@ -44,6 +46,8 @@ class MediaPad:
             self.lcd = dbus.Interface(self.device,URI_FOR_LCD)
             self.lcd.WriteText('Gnome linked ;-)')  
             self.lcd.BlinkOrBeep(2,0)
+            self.lcd.SetIndicator(1,0)
+            self.lcd.SetIndicator(2,0)              
             print 'MediaPad is connected'
     
     # Clean the LCD and display clock
@@ -54,6 +58,7 @@ class MediaPad:
                 
     # Load a line to line buffers of the LCD (3X16 chars per line)
     def loadLine(self,lineno,text):
+        import sys
         i = 1
         # Parse the text data into the 3 buffers
         while (text != '' and i <= 3) : 
@@ -63,11 +68,23 @@ class MediaPad:
                 text = text[16:len(text)-1]
             if (len(buf) <= 16): 
                 buf = buf + " "
-            self.lcd.WriteBuffer((((lineno * 3) - 3) + i - 1),'{:<16}'.format(buf))        
+            self.lcd.WriteBuffer((((lineno * 3) - 3) + i - 1),self.delete_accent('{:<16}'.format(buf)).encode(sys.stdout.encoding))        
             i=i+1 
+    
+    def delete_accent(self, ligne):
+        accents = { 'a': ['à', 'ã', 'á', 'â'],
+                    'e': ['é', 'è', 'ê', 'ë'],
+                    'i': ['î', 'ï'],
+                    'u': ['ù', 'ü', 'û'],
+                    'o': ['ô', 'ö'] }
+        for (char, accented_chars) in accents.iteritems():
+            for accented_char in accented_chars:
+                ligne = ligne.replace(accented_char, char)
+        return ligne
     
     # Receive an write order from a software object -> dispatch to correct writer
     def writeData(self,soft):
+        soft.loopNumber = soft.loopNumber + 1        
         if self.writing == False :
             self.writing == True
             # If the LCD is on clock mode, clean the LCD
@@ -83,7 +100,6 @@ class MediaPad:
     # Write media data to the LCD (title/artist/album/progress bar/status/resting time)     
     def writeMedia(self,soft):
         # TITLE/album/artist
-        soft.loopNumber = soft.loopNumber + 1
         if soft.state == "playing" : 
             # Load all items we want to display
             items = {soft.data.title,soft.data.artist,soft.data.album}
@@ -145,16 +161,25 @@ class MediaPad:
     # Light indicators, beep and blink / Reset indicators    
     def writeMessage(self,soft):
         self.loopNumber = self.loopNumber + 1
+        if self.loopNumber%2 == 0 : 
+            on = 1
+        else:
+            on = 0
         if soft.type == "message" : 
             indic = 2   # chat indicator
             beep = 1    # short beep
         else : 
             indic = 1   # mail indicator
-            beep = 2    # beep sound            
+            beep = 2    # beep sound
+            # stop mail alert after 30 loop (sec)
+            if self.loopNumber > 30 :
+                self.loopNumber = 0
+                soft.state="read"         
         # If received, alert
         if soft.state=="received":
-            self.lcd.SetIndicator(indic,1)
-            self.lcd.BlinkOrBeep(1,beep)  
+            self.lcd.SetIndicator(indic,on)
+            if self.loopNumber == 1 :  
+                self.lcd.BlinkOrBeep(1,beep)  
         # When read/sent, hide indicators and led light      
         elif soft.state=="read":
             self.lcd.SetIndicator(indic,0)

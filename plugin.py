@@ -9,15 +9,19 @@ from dbus.mainloop.glib import DBusGMainLoop
 # Import listeners Class for software to support
 from listeners import *
 
+
+
 # Create the threaded mainloop
 DBusGMainLoop(set_as_default=True)
 mainloop = gobject.MainLoop()
 gobject.threads_init()
 context = mainloop.get_context()
 
+# Connect to the system bus and session bus 
 ses_bus = dbus.SessionBus()
 sys_bus = dbus.SystemBus()
-   
+
+
 # Instantiate the mediapad     
 mediapad = MediaPad(sys_bus)
 
@@ -29,10 +33,12 @@ def display(softwares,mediapad):
     # Main loop waiting for mediapad (listen for connection)
     while 1 : 
         if mediapad.lcd != None :  
+            
             # When mediapad is connected... 
             for software in softwares :
                 # Connect the soft to the actual mediapad instance
                 software.mediapad = mediapad
+                             
             # and begin refresh display...  
             pausedMode = False    
             while mediapad.lcd != None :
@@ -40,6 +46,10 @@ def display(softwares,mediapad):
                 best = 0
                 prioritySoft = None
                 for software in softwares :
+                    # Get received messages/mails
+                    if software.state == "received":
+                        software.writeData()
+                    
                     # Get softwares only with "playing" state (out of event control)
                     if software.state == "playing" or software.state == "loading" or software.state == "loaded":
                         # Get the actual best priority software playing
@@ -47,6 +57,7 @@ def display(softwares,mediapad):
                             best = software.priority
                             prioritySoft = software
                             pausedMode = False
+                            
                 # If no software is playing, look for one paused
                 if prioritySoft == None : 
                     for software in softwares :
@@ -57,16 +68,18 @@ def display(softwares,mediapad):
                                 best = software.priority
                                 prioritySoft = software 
                                 # set pausedMode so don't refresh paused display till new playing
-                                pausedMode = True           
+                                pausedMode = True  
+                                        
                 # If we found something to display...           
                 if prioritySoft != None : 
                     # Get/refresh the data from the soft
                     prioritySoft.getData() 
                     # Write it to the LCD
                     prioritySoft.writeData()
+                    
                 # No player is playing or paused, no "pausedMode", so clear the LCD
                 elif pausedMode == False: 
-                    mediapad.ClearScreen()
+                    mediapad.lcd.SetScreenMode(3)
                 # Wait 1 second and then, refresh 
                 time.sleep(1.0)
         else : 
