@@ -66,8 +66,11 @@ class MessageData :
 class SoftwareListened() : 
        
     priorityGlobal = 0
+    idGlobal = 0
 
     def __init__(self,session_bus):
+        SoftwareListened.idGlobal = SoftwareListened.idGlobal + 1
+        self.id = SoftwareListened.idGlobal
         self.name = "unsupported software"        
         self.state = "undefined"
         self.type = "undefined" 
@@ -77,23 +80,39 @@ class SoftwareListened() :
         self.prox = None
         self.loopNumber = 0
         self.priority = 0
+        self.listening = True
         self.session_bus = session_bus
         self.setting()
     
     def setting(self) :
         self.data = None
-              
+
     def listen(self):
+        self.listen_me() 
+        print "Listening " + self.name  
+        
+    def listen_me(self):
         print 'Can\' listen ' + self.name
-     
+               
+    def unlisten(self):
+        self.unlisten_me()
+        self.app = None
+        self.listening = False
+        print "Unlistening " + self.name    
+              
+    def unlisten_me(self):
+        print 'Can\' unlisten ' + self.name  
+
     def ownerChanged(self,new_owner):
-        if new_owner == '':
-            self.app = None
-            self.statusChanged("stopped")
-        else:
-            self.listen()
-            self.statusChanged("waiting")
-            
+        if self.listening == True :
+            if new_owner == '':
+                self.app = None
+                self.statusChanged("stopped")
+                self.unlisten_me()
+            else:
+                self.listen()
+                self.statusChanged("waiting")
+                
     def statusChanged(self,status):
         self.loopNumber = 0
         self.state = status
@@ -119,14 +138,17 @@ class SoftwareListened() :
 class BansheeListened(SoftwareListened):
 
     def setting(self):
+        self.session_bus.watch_name_owner(URI_FOR_BANSHEE,self.ownerChanged)
         self.name = "banshee"
         self.type = "media"
         self.data =  MediaData()
-        self.session_bus.watch_name_owner(URI_FOR_BANSHEE,self.ownerChanged)
-                  
-    def listen(self):
+                          
+    def listen_me(self):        
         self.app = self.session_bus.get_object(URI_FOR_BANSHEE, PATH_TO_BANSHEE_PLAYER)
         self.session_bus.add_signal_receiver(self.statusChanged, dbus_interface=URI_FOR_BANSHEE_PLAYER,signal_name=EVENT_FOR_BANSHEE_STATE)
+       
+    def unlisten_me(self):
+        self.session_bus.remove_signal_receiver(self.statusChanged,signal_name=EVENT_FOR_BANSHEE_STATE,dbus_interface=URI_FOR_BANSHEE_PLAYER)
                
     def getData(self):
         if self.app != None : 
@@ -157,11 +179,14 @@ class RhythmboxListened(SoftwareListened):
         self.data.uri = None
         self.session_bus.watch_name_owner(URI_MPRIS_FOR_RHYTHMBOX,self.ownerChanged)
                     
-    def listen(self):
+    def listen_me(self):
         import dbus
         self.prox = self.session_bus.get_object(URI_MPRIS_FOR_RHYTHMBOX, PATH_FOR_MPRIS_MEDIAPLAYER)
         self.app = dbus.Interface(self.prox, URI_DBUS_PROP)
         self.app.connect_to_signal(EVENT_FOR_RHYTHMBOX_STATE,self.propertiesChanged)    
+   
+    def unlisten_me(self):
+        self.session_bus.remove_signal_receiver(self.statusChanged,signal_name=EVENT_FOR_RHYTHMBOX_STATE,dbus_interface=URI_DBUS_PROP)
    
     def propertiesChanged(self,interface, changed_props, invalidated_props):
             self.state = self.app.Get(URI_MPRIS_FOR_PLAYER, 'PlaybackStatus').lower()
@@ -201,11 +226,14 @@ class TotemListened(SoftwareListened):
         self.status = ["playing","paused","stopped"]
         self.session_bus.watch_name_owner("org.mpris.Totem",self.ownerChanged)
                   
-    def listen(self):
+    def listen_me(self):
         import dbus
         self.prox = self.session_bus.get_object("org.mpris.Totem", "/Player")
         self.app =  dbus.Interface(self.prox, dbus_interface="org.freedesktop.MediaPlayer")
         self.session_bus.add_signal_receiver(self.propertiesChanged, dbus_interface="org.freedesktop.MediaPlayer",signal_name=EVENT_FOR_TOTEM_STATE)  
+    
+    def unlisten_me(self):
+        self.session_bus.remove_signal_receiver(self.propertiesChanged,signal_name=EVENT_FOR_TOTEM_STATE,dbus_interface="org.freedesktop.MediaPlayer")
                 
     def propertiesChanged(self,status):
         if self.app != None : 
@@ -257,18 +285,16 @@ class SkypeListened(SoftwareListened):
         self.event_skype = Skype4Py.Skype(Events=SkypeEvents(self))
         self.appev = self.event_skype.Application('Skype4Py')
                     
-    def listen(self):
+    def listen_me(self):
         import Skype4Py
-        time.sleep(2)
         try : 
             self.event_skype = Skype4Py.Skype(Events=SkypeEvents(self))
             self.event_skype.Attach()
             self.appev = self.event_skype.Application('Skype4Py')
             self.appev.Create()     
         except : 
-            print "Error while listening for Skype... Waiting 2 sec and try again."
-            time.sleep(2)
-            self.listen()
+            print "Error while listening for Skype... Try to restart monitoring"
+            self.ownerChanged('')
               
     def getData(self):
         self.data.message = self.data.message # TODO : Refresh data from skype
@@ -285,8 +311,11 @@ class EvolutionListened(SoftwareListened):
         self.data =  MessageData()
         self.session_bus.watch_name_owner(URI_FOR_EVOLUTION,self.ownerChanged)
             
-    def listen(self):
+    def listen_me(self):
         self.session_bus.add_signal_receiver(self.on_evolution_new_mail, dbus_interface=URI_FOR_EVOLUTION_CLIENT,signal_name=EVENT_FOR_EVOLUTION_STATE) 
+    
+    def unlisten_me(self):
+        self.session_bus.remove_signal_receiver(self.on_evolution_new_mail,signal_name=EVENT_FOR_EVOLUTION_STATE,dbus_interface=URI_FOR_EVOLUTION_CLIENT)
     
     def on_evolution_new_mail(self,path, folder, foo, uid, sender, subject):
         self.statusChanged("received")

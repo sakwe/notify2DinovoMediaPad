@@ -1,7 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import time
 
 # This part contains the LCD displayer class
 #-------------------------------------------
@@ -45,7 +44,7 @@ class MediaPad:
             self.device = self.system_bus.get_object(URI_FOR_LCD,PATH_FOR_LCD,True,True)
             self.lcd = dbus.Interface(self.device,URI_FOR_LCD)
             self.lcd.WriteText('Gnome linked ;-)')  
-            self.lcd.BlinkOrBeep(2,0)
+            self.lcd.BlinkOrBeep(1,0)
             self.lcd.SetIndicator(1,0)
             self.lcd.SetIndicator(2,0)              
             print 'MediaPad is connected'
@@ -87,11 +86,11 @@ class MediaPad:
         soft.loopNumber = soft.loopNumber + 1        
         if self.writing == False :
             self.writing == True
-            # If the LCD is on clock mode, clean the LCD
-            if self.clockMode == True : 
-                self.lcd.WriteText(" ")
-                self.clockMode = False
             if soft.type == "media" :
+                 # If the LCD is on clock mode, clean the LCD
+                if self.clockMode == True : 
+                    self.lcd.WriteText(" ")
+                    self.clockMode = False
                 self.writeMedia(soft)
             elif soft.type == "message" or soft.type == "mail":  
                 self.writeMessage(soft)  
@@ -160,8 +159,7 @@ class MediaPad:
             
     # Light indicators, beep and blink / Reset indicators    
     def writeMessage(self,soft):
-        self.loopNumber = self.loopNumber + 1
-        if self.loopNumber%2 == 0 : 
+        if soft.loopNumber%2 == 0 : 
             on = 1
         else:
             on = 0
@@ -172,14 +170,15 @@ class MediaPad:
             indic = 1   # mail indicator
             beep = 2    # beep sound
             # stop mail alert after 30 loop (sec)
-            if self.loopNumber > 30 :
-                self.loopNumber = 0
+            if soft.loopNumber > 30 :
+                soft.loopNumber = 0
+                self.lcd.BlinkOrBeep(3,1)
                 soft.state="read"         
         # If received, alert
         if soft.state=="received":
             self.lcd.SetIndicator(indic,on)
-            if self.loopNumber == 1 :  
-                self.lcd.BlinkOrBeep(1,beep)  
+            if soft.loopNumber == 1 :  
+                self.lcd.BlinkOrBeep(beep,1)  
         # When read/sent, hide indicators and led light      
         elif soft.state=="read":
             self.lcd.SetIndicator(indic,0)
